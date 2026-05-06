@@ -1,0 +1,1058 @@
+本环境中智能体能控制的英雄单位包括 **鲁班七号** 、 **狄仁杰** 。
+
+#### 狄仁杰
+
+* 英雄技能
+
+|          | 技能名称 | 技能ID | 技能描述                                                                               |
+| :------: | :------: | :----: | -------------------------------------------------------------------------------------- |
+| 被动技能 |   迅捷   | 13300 | 每次普攻给自己叠层（最多5层），每层获得额外攻速和移动速度提升。                        |
+|  一技能  | 六令追凶 | 13310 | 向指定扇形区域发射令牌，对敌人造成伤害。被动：每两次普攻后，下次普攻获得随机强化效果。 |
+|  二技能  | 公理庇佑 | 13320 | 向周围掷出令牌对敌人造成伤害，同时解除自身负面效果并短暂无敌。                         |
+|  三技能  | 王朝密令 | 13330 | 向指定方向发射令牌，命中第一个敌方英雄造成伤害和眩晕效果并降低物理防御和魔法防御。     |
+
+---
+
+#### 鲁班七号
+
+* 英雄技能
+
+|          |  技能名称  | 技能ID | 技能描述                                                                                                                                                          |
+| :------: | :--------: | :----: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 被动技能 |  火力压制  | 11200 | 第五次普攻或使用技能后的下次普攻会强化为扫射，扫射对敌人造成3次伤害。                                                                                             |
+|  一技能  |  河豚手雷  | 11210 | 投掷一枚河豚手雷，造成物理伤害和减速，持续2秒。同时还会获得敌人视野。                                                                                             |
+|  二技能  | 无敌鲨嘴炮 | 11220 | 发射一枚火箭炮，火箭炮可击退身前敌人，命中英雄后造成物理伤害，并附带基于目标已损生命的法术伤害。                                                                  |
+|  三技能  |  空中支援  | 11230 | 召唤河豚飞艇向指定方向进行空中支援，每秒对范围内随机一个敌人投掷炸弹，造成物理伤害。命中的敌人受到减速，持续1秒。河豚飞艇支援时会照亮区域内的视野，支援持续14秒。 |
+
+### 召唤师技能
+
+本赛题开放所有召唤师技能，智能体可在**对局初始化阶段**根据对方英雄自主选择一个召唤师技能。
+
+可选的召唤师技能如下：
+
+| 技能名称 | 技能ID | 效果描述                                         |
+| :------: | :----: | ------------------------------------------------ |
+|  治疗术  | 80102 | 立即恢复英雄一定量的生命值                       |
+|   晕眩   | 80103 | 对身边所有敌人施加眩晕效果，使其短暂无法行动     |
+|   惩击   | 80104 | 对身边的野怪和小兵造成真实伤害并眩晕             |
+|   干扰   | 80105 | 沉默敌方机关使用，使其短暂无法进行攻击           |
+|   净化   | 80107 | 解除自身所有负面和控制效果并暂时免疫控制效果     |
+|   终结   | 80108 | 对低血量敌方英雄造成基于其已损失生命值的真实伤害 |
+|   疾跑   | 80109 | 短时间内大幅提升英雄移动速度                     |
+|   狂暴   | 80110 | 短时间内提升英雄物理吸血和法术吸血               |
+|   闪现   | 80115 | 向指定方向位移一段距离                           |
+|   弱化   | 80121 | 减少身边敌人伤害输出                             |
+
+
+
+# 境详述
+
+## 环境配置
+
+在智能体和环境的交互中，首先会调用 `env.reset`方法，该方法接受一个 `usr_conf`参数，这个参数通过读取 `agent_算法名/conf/train_env_conf.toml`文件的内容来实现定制化的环境配置。因此，用户可以通过修改 `train_env_conf.toml`文件中的内容来调整环境配置。
+
+```python
+# 读取 train_env_conf.toml 得到 usr_conf，此处以 agent_ppo 为例
+usr_conf = read_usr_conf("agent_ppo/conf/train_env_conf.toml", logger)
+
+# env.reset 返回一个 dict：{observation, extra_info, ...}
+env_obs = env.reset(usr_conf=usr_conf)
+observation = env_obs["observation"]
+extra_info = env_obs["extra_info"]
+```
+
+`train_env_conf.toml`中包含以下信息：
+
+|               数据名               | 数据类型 |              取值范围              |  默认值  | 数据描述                                                                                |
+| :--------------------------------: | :------: | :---------------------------------: | :-------: | --------------------------------------------------------------------------------------- |
+|       **monitor_side**       |   int   |               [0, 1]               |     0     | 监控上报的阵营，0 表示蓝方阵营，1 表示红方阵营                                          |
+| **auto_switch_monitor_side** |   bool   |             true/false             |   true   | 是否启用自动换边逻辑                                                                    |
+|      **opponent_agent**      |  string  | selfplay / common_ai / 自定义模型id | selfplay | 对手智能体类型。selfplay：自对弈；common_ai：与规则AI对战；自定义模型id：与指定模型对战 |
+|      **eval_interval**      |   int   |                 >=1                 |    10    | 评估间隔（单位：局）                                                                    |
+|    **eval_opponent_type**    |  string  | selfplay / common_ai / 自定义模型id | common_ai | 评估对手类型                                                                            |
+|     **hero_id（蓝方）**     |   int   |              112 / 133              |    112    | 蓝方英雄ID：112=鲁班七号，133=狄仁杰                                                    |
+|     **hero_id（红方）**     |   int   |              112 / 133              |    112    | 红方英雄ID：112=鲁班七号，133=狄仁杰                                                    |
+
+具体使用方式请参考下方提供的默认示例
+
+```yaml
+[monitor]
+# 监控上报的阵营，类型整型，取值范围[0,1]
+# 0表示蓝方阵营，1表示红方阵营
+monitor_side = 0  
+
+# Auto switch monitor side, Type: boolean, value range: [true, false]
+# 是否启用自动换边逻辑，类型布尔值，true表示开启，false表示关闭
+auto_switch_monitor_side = true
+
+[episode]
+# 对手智能体，类型字符串，取值范围[selfplay, common_ai, 自定义模型id]
+# 1. selfplay：自对弈
+# 2. common_ai：与基于规则的common_ai对战
+# 3. 自定义的模型id：与指定的模型对战，需要先将模型上传至模型管理，并且将模型ID配置在kaiwu.json中，然后在此处进行引用
+opponent_agent = "selfplay"
+
+# 评估间隔(单位局)，类型整型，取值范围为大于等于1的整数
+eval_interval = 10
+
+# 评估对手类型，类型字符串，取值范围为[selfplay, common_ai, 自定义模型id]
+# 值的含义请参考opponent_agent注释
+eval_opponent_type = "common_ai"
+
+# 蓝方阵容配置
+[[lineups.blue_camp]]
+# 英雄ID，类型整数，取值范围: 112:鲁班七号，133:狄仁杰
+hero_id = 112
+
+# 红方阵容配置
+[[lineups.red_camp]]
+# 英雄ID，类型整数，取值范围: 112:鲁班七号，133:狄仁杰
+hero_id = 112
+```
+
+> **💡 补充说明** ：
+>
+> 1. **`train_env_conf.toml`文件中的配置仅在训练时生效** ，请按上表数据描述进行配置。若配置错误，训练任务会变为“失败”状态，此时可以通过查看**env模块的错误日志**进行排查。
+> 2. 若需调整模型评估任务时的配置，用户需要通过腾讯开悟平台创建评估任务并完成环境配置，详细参数见[智能体模型评估模式](https://tencentarena.com/docs/p-competition-hok1v1/61.1.3/guidebook/dev-guide/agent_competition/#%E6%A8%A1%E5%9E%8B%E8%AF%84%E4%BC%B0%E6%A8%A1%E5%BC%8F)。
+
+## 环境信息
+
+调用 `env.step`接口时，会返回 `(env_reward, env_obs)` 两个 dict：
+
+```python
+env_reward, env_obs = env.step(actions)
+```
+
+* `env_reward`：训练侧回报数据（非比赛分数）
+* `env_obs`：环境观测数据，结构如下表：
+
+|   数据名   |  数据类型  |             数据描述             |
+| :---------: | :---------: | :------------------------------: |
+|  frame_no  |    int32    |     当前环境实例运行时的帧数     |
+| observation | Observation | 环境实例针对智能体提供的观测信息 |
+| terminated |    int32    |       当前环境实例是否结束       |
+|  truncated  |    int32    |    当前环境实例是否异常或中断    |
+| extra_info |  ExtraInfo  |      环境实例的可选额外信息      |
+
+调用 `env.reset`可以重置环境，此时，只返回 env_obs。
+
+下面会对这些数据进行介绍，完整的观测数据结构可以参考[数据协议](https://tencentarena.com/docs/p-competition-hok1v1/61.1.3/guidebook/dev-guide/protocol/).
+
+### 观测信息（observation）
+
+`observation`是环境实例针对智能体返回的原始信息，按照阵营进行区分。`observation[agent_id]`对应的具体描述如下：
+
+|     数据名     |                         数据描述                         |
+| :-------------: | :-------------------------------------------------------: |
+|     env_id     |                          对局id                          |
+|    player_id    |             英雄运行时id, 作为英雄的唯一标识             |
+|   player_camp   |                       英雄所属阵营                       |
+|  legal_action  |                         合法动作                         |
+| sub_action_mask | 不同动作（button）对应的合法子动作（move、skill、target） |
+|   frame_state   |                        环境帧状态                        |
+|       win       |                         是否获胜                         |
+
+#### 环境帧状态（frame_state）
+
+|    数据名    |                        数据描述                        |
+| :----------: | :-----------------------------------------------------: |
+|   frame_no   |                        当前帧号                        |
+| hero_states |             当前帧中所有英雄状态构成的集合             |
+|  npc_states  | 当前帧中所有 NPC 状态构成的集合（小兵、防御塔、野怪等） |
+|   bullets   |             当前帧中所有子弹状态构成的集合             |
+|    cakes    |          当前帧中所有功能物件（神符等）的集合          |
+| frame_action |          本帧发生的事件（目前仅包含死亡事件）          |
+|  map_state  |               地图状态（1v1 默认不使用）               |
+
+完整字段结构见[数据协议](https://tencentarena.com/docs/p-competition-hok1v1/61.1.3/guidebook/dev-guide/protocol/#aiframestate--%E5%B8%A7%E7%8A%B6%E6%80%81)。
+
+### 额外信息（extra_info）
+
+环境会提供部分额外信息，训练时作为提供给智能体的观测信息的补充，评估时无法获取。在本环境中，额外信息仅包含了环境的错误码和错误信息，因此不会在训练和评估时传输给智能体使用。
+
+### 动作空间
+
+王者1v1强化项目使用层次化的动作空间，将所有动作分为以下几类：
+
+* what，你要按哪个按键：**12个button**
+* how，你要往哪个方向拖动按键：**16*16个方向选择**
+* who，你的技能作用对象是谁：**9个target（None，敌方英雄，自身英雄，防御塔，4个小兵，1个野怪）**
+
+![image55](https://tencentarena.com/docs/p-competition-hok1v1/61.1.3/assets/images/image55-5d92ea0af32f2e8713dcdf9443fceaef.png)
+
+#### 动作空间各维度说明
+
+| Action Class    | Type                          | Description   | Dimension |
+| --------------- | ----------------------------- | ------------- | --------- |
+| Button          | None                          | 非法动作      | 1         |
+| None            | 无动作                        | 1             |           |
+| Move            | 移动                          | 1             |           |
+| Normal Attack   | 释放普通攻击                  | 1             |           |
+| Skill 1         | 释放第1个技能                 | 1             |           |
+| Skill 2         | 释放第2个技能                 | 1             |           |
+| Skill 3         | 释放第3个技能                 | 1             |           |
+| Heal Skill      | 释放恢复技能                  | 1             |           |
+| Chosen Skill    | 释放召唤师技能                | 1             |           |
+| Recall          | 释放回城技能                  | 1             |           |
+| Skill 4         | 释放第4个技能(仅特定英雄有效) | 1             |           |
+| Equipment Skill | 释放特定装备提供的技能        | 1             |           |
+| Move            | Move X                        | 沿X轴移动方向 | 16        |
+| Move Z          | 沿Z轴移动方向                 | 16            |           |
+| Skill           | Skill X                       | 技能沿X轴方向 | 16        |
+| Skill Z         | 技能沿Z轴方向                 | 16            |           |
+| Target          | None                          | 空目标        | 1         |
+| Enemy           | 敌方英雄                      | 1             |           |
+| Self            | 自身英雄                      | 1             |           |
+| Soldier         | 最近的四个小兵                | 4             |           |
+| Tower           | 最近的防御塔                  | 1             |           |
+| Monster         | 最近的野怪                    | 1             |           |
+
+#### Action Mask 机制
+
+ **Sub action mask** （对应 `observation[agent_id]["sub_action_mask"]`）：
+
+该机制根据当前按钮（button）类型，对剩余动作（action）进行选择性过滤。
+
+ **原因** ：并非所有技能都需要拖动按键，也并非所有技能都有目标（target）。
+
+举例说明：
+
+* 以貂蝉为例，其1技能和2技能是方向性技能，因此当预测按钮为 `skill1` 或 `skill2` 时，`skill X` 与 `skill Z` 的预测结果是有意义的。
+* 而对于貂蝉的3技能，`skill X` 与 `skill Z` 的预测结果则没有意义，应予以过滤。
+
+![image56](https://tencentarena.com/docs/p-competition-hok1v1/61.1.3/assets/images/image56-e87ef863e282250a84c434796af6eef1.gif)
+
+**Legal action mask** (对应 `observation[agent_id]["legal_action"]`):
+
+* 根据游戏规则，直接屏蔽不合法或不可执行的动作预测。例如：处于冷却状态（CD）中的技能无法释放，因此对应动作会被屏蔽。该机制能够加快训练速度，避免模型进行无意义的动作探索，提高训练效率。
+
+![image57](https://tencentarena.com/docs/p-competition-hok1v1/61.1.3/assets/images/image57-c39c1607cfb98f031ca69c02e73307e8.gif)
+
+#### **action具体的执行流程**
+
+AI选取action的流程如下：
+
+1. 选择执行的动作类型（which_button） 从 `which_button`维度中，选取值最大的索引对应的合法动作（legal action），作为英雄下一步要执行的动作。
+2. 根据所选动作类型，确定动作参数的计算方式：
+
+动作参数的计算根据技能类型分为以下几类：
+
+1. 方向型技能：需要读取位置偏置 `offset_x`, `offset_z`和 `target`
+2. 位置型技能：需要读取位置偏置 `offset_x`, `offset_z`和 `target`
+3. 目标性技能：只需读取target
+
+**示例：方向型技能的执行过程**
+
+![image57](https://tencentarena.com/docs/p-competition-hok1v1/61.1.3/assets/images/offset_x_z-ae5df19862180b0ceb83e579cd76dcd9.png)
+
+* 橙色方块为main_hero的位置，黄色方块为选中的target的位置。
+* 我们以target位置作为offset坐标系的中心点，因此它在offset维度对应的索引为(21, 21)。
+* 然后，我们根据offset_x，offset_z的找到最终的位置（下例中以offset_x=25,offset_z=15为例），图中绿色即为以黄色点为中心，offset为(25, 15)的最终目标位置。
+* 那么连接橙色的英雄位置和绿色方块位置的红色箭头方向即为实际技能释放方向。
+
+**备注：**
+
+* 这里如果直接把 `(skill_x, skill_z)` 设置成 `(21, 21)`, 技能的释放方向就是目标所在的位置
+* 这里图示例子的 `offset_x`和 `offset_z`是 42 * 42 的, **在1v1的环境中, 应该是 16 * 16**
+* `move_x`和 `move_z`同理, 当action为move的时候, 以自身为 `target`
+
+### 观测视野范围
+
+环境存在战争迷雾机制，智能体只能观测到属于己方阵营的单位，或者处于己方阵营单位视野范围内的敌方单位和建筑。视野范围由单位的视野半径决定，超出视野范围的敌方单位和建筑将不可见。
+
+### 时间信息
+
+帧(frame)和步(step)存在一定映射关系。
+
+**帧**是场景的一个时间单位，表示场景的一个完整更新周期。在每一帧中，场景的所有元素(如英雄状态等)都会根据当前的状态和输入进行更新。
+
+**步**是强化学习环境中的一个时间单位，表示智能体(agent)在环境中执行一个动作并接收反馈的过程。在每一步中，智能体选择一个动作，环境根据该动作更新状态，并返回新的状态、奖励和终止信号。
+
+在本环境中，1 个 step 由 6 个 frame 组成。这意味着每个动作对应一个步，在每一步中，智能体将在六个连续的帧中执行同一个动作。环境将在每一步结束后更新状态并返回反馈，场景只有在完成六帧后，环境状态才会返回一次状态的更新。
+
+* **步更新** ：在每一步中，智能体选择一个动作，环境更新状态并返回。
+* **帧更新** ：在一步中，场景进行六次帧更新，更新所有场景中对象的状态并渲染新的画面。
+
+帧(frame)，步(step)，仿真时间秒(s)和仿真时间毫秒(ms)的关系如下：
+
+1 frame 约等于 33 ms
+
+1 step 执行 6 frame
+
+1 s 等于 1000 ms
+
+## 环境监控信息
+
+监控面板中包含了**env**模块，表示**环境指标**数据。王者荣耀1v1 分为 **self-play** 和 **eval** 两种模式的监控指标，详细说明如下。
+
+### self-play 指标
+
+| 面板中文名称 |  面板英文名称  |            指标名称            |                                       说明                                       |
+| :----------: | :-------------: | :----------------------------: | :------------------------------------------------------------------------------: |
+|     胜率     |    win_rate    |            win_rate            |   每局任务结束时，在 monitor_side 视角下获得任务胜利即为1，失败为0，超时为0.5   |
+|  防御塔血量  |    tower_hp    | self_tower_hp / enemy_tower_hp |        每局任务结束时，两边阵营防御塔剩余的血量，可以反映智能体的推塔能力        |
+|  任务总帧数  |      frame      |             frame             |                         每局任务结束时，该局任务的总帧数                         |
+|     经济     | money_per_frame |        money_per_frame        |       每局任务结束时，在 monitor_side 视角获得 money 的总量除以对局总帧数       |
+| 击杀/死亡数 |       K/D       |          kill / death          |    kill：单局内我方英雄击杀敌方英雄的计数；death：单局内我方英雄被击杀的计数    |
+|     伤害     | hurt_per_frame |  hurt_by_hero / hurt_to_hero  | hurt_by_hero：每帧受到来自敌方英雄的伤害；hurt_to_hero：每帧对敌方英雄造成的伤害 |
+
+### eval 指标
+
+与 self-play 指标相同，通过 label 区分对手类型，例如 `win_rate:common_ai`、`win_rate:{model_id}`。.
+
+
+
+# 智能体详述
+
+我们在代码包中提供了智能体的简单实现，本文将对该部分内容进行讲解，包括观测处理及优化指南等。
+
+## 观测处理
+
+环境返回的 `observation`信息包含了针对智能体的局部观测信息，可以在 `observation_process`函数中对这些局部观测信息进行处理。
+
+很多情况下，观测信息体量较大且步骤繁多，我们推荐用户基于代码包提供的 `process_feature`进行特征处理：
+
+```python
+defprocess_feature(self, observation):
+    frame_state = observation["frame_state"]
+
+    main_camp_hero_vector_feature = self.process_hero_feature(frame_state)
+    organ_feature = self.process_organ_feature(frame_state)
+
+    feature = main_camp_hero_vector_feature + organ_feature
+
+return feature
+```
+
+### 特征处理
+
+通过在程序中调用 `env.reset`或 `env.step`，环境会返回当前帧的环境状态数据，从中可以获取到英雄血量、技能信息、防御塔信息等数值，基于游戏状态数据，可以处理得到智能体网络推理所需的特征。
+
+以下是特征区间及其维度的详细说明：
+
+|     **特征区间名**     | **特征维数** | **举例**       |
+| :---------------------------: | :----------------: | -------------------- |
+| main_camp_hero_vector_feature |         3         | 英雄存活情况、位置   |
+|         organ_feature         |         7         | 敌方防御塔血量、位置 |
+
+代码包中提供了一些特征的实现，可以参考 `<agent_算法名称>/feature/feature_process/__init__.py`目录下里的 `FeatureProcess`类的设计和实现。`FeatureProcess` 类内部包含了 `HeroProcess`，`OrganProcess`等子类，分别用于处理不同单位的特征。
+
+处理特征时，首先会根据当前观测的环境帧数据来保存各个单位的信息，然后从 `feature_config`特征配置中读取对应的**特征处理函数**和 **特征归一化配置** ：
+
+* **特征处理函数** ：用于从帧数据中提取特征。
+* **特征归一化配置** ：通过 one-hot 编码或最大最小值归一化方法，将特征归一化到 0～1 的范围，以便于网络推理计算。
+
+需要注意的是：
+
+* 对于位置特征：考虑到王者1v1中地图相对于游戏双方而言是镜像对称的，在双方眼中其都处于地图左下角，故使用相对位置特征，将处于地图右上角的英雄的特征数据进行镜像反转，将其转换为左下角位置。
+
+### 奖励处理
+
+这里的奖励特指强化学习中的Reward，注意要与环境反馈的Score进行区分。Score用于衡量玩家在任务中的表现，也作为衡量强化学习训练后的模型的优劣。
+
+代码包里提供了一些奖励的实现，可以参考 `<agent_算法名称>/feature/reward_process.py`里的 `GameRewardManager`类的设计和实现，用户还可以在这个函数中去实现自己的reward设计，这部分非常开放，回报设计的依据不一定只是环境给出的信息，也可以是用户对问题的理解、经验或者知识，建议用户根据对问题和强化学习算法的理解，去设计和实现自己的reward。
+
+参考代码包中GameRewardManager对reward的实现，同学们可以通过设计多个奖励子项来帮助智能体获得更好的效果。以下是推荐设计的奖励子项：
+
+| **reward** | **存储类型** | **描述**   |
+| ---------------- | ------------------ | ---------------- |
+| hp_point         | dense              | 英雄生命值比例   |
+| tower_hp_point   | dense              | 防御塔生命值比例 |
+| money (gold)     | dense              | 获得的总金币数   |
+| ep_rate          | dense              | 法力值比例       |
+| death            | sparse             | 英雄被击杀       |
+| kill             | sparse             | 击杀敌方英雄     |
+| exp              | dense              | 获得的经验值     |
+| last_hit         | sparse             | 对小兵的最后一击 |
+| forward          | dense              | 前进奖励         |
+
+其中，`tower_hp_point` 和 `forward` 奖励已在默认代码中实现，大家可以参考其设计思路进行扩展。
+
+#### 回报计算方法
+
+* 部分奖励使用零和reward设计方案，以当前决策帧和上一决策帧的相关数值差作为agent的reward，两个agent的同类reward项相减作为最终reward，最终多种reward项加权求和作为最终的reward返回。回报计算方法不止一种，我们鼓励用户进行创新。
+
+### 召唤师技能选择
+
+智能体在 **对局初始化阶段** ，需根据双方英雄信息自主选择一个召唤师技能，选择发生在 `env.reset()` 之前。
+
+### 选择流程
+
+```python
+usr_conf = load_usrconf()
+
+for camp in camps:
+    summoner_skill_id = agents[camp].init_config(lineups)
+    usr_conf[camp]["summoner_skill_id"]= summoner_skill_id
+
+# 对局初始化
+env_obs = env.reset(usr_conf)
+for camp in camps:
+    act = agents[camp].reset(env_obs)
+
+# 常规对战循环
+whilenot done:
+    action =[]
+for camp in camps:
+        act = agents[camp].exploit(env_obs)
+        action.append(act)
+    env_reward, env_obs = env.step(action)
+```
+
+### init_config 接口
+
+Agent 新增 `init_config()` 方法，用于在初始化阶段选择召唤师技能：
+
+```python
+definit_config(self, lineups)->dict:
+"""
+    在对局初始化阶段选择召唤师技能。
+
+    Args:
+        lineups: 双方英雄ID
+
+    Returns:
+        int: summoner_skill_id
+    """
+```
+
+### 召唤师技能列表
+
+| 技能名称 | 技能ID | 效果描述                                         |
+| :------: | :----: | ------------------------------------------------ |
+|  治疗术  | 80102 | 立即恢复英雄一定量的生命值                       |
+|   晕眩   | 80103 | 对身边所有敌人施加眩晕效果，使其短暂无法行动     |
+|   惩击   | 80104 | 对身边的野怪和小兵造成真实伤害并眩晕             |
+|   干扰   | 80105 | 沉默敌方机关使用，使其短暂无法进行攻击           |
+|   净化   | 80107 | 解除自身所有负面和控制效果并暂时免疫控制效果     |
+|   终结   | 80108 | 对低血量敌方英雄造成基于其已损失生命值的真实伤害 |
+|   疾跑   | 80109 | 短时间内大幅提升英雄移动速度                     |
+|   狂暴   | 80110 | 短时间内提升英雄物理吸血和法术吸血               |
+|   闪现   | 80115 | 向指定方向位移一段距离                           |
+|   弱化   | 80121 | 减少身边敌人伤害输出                             |
+
+
+# 智能体详述
+
+我们在代码包中提供了智能体的简单实现，本文将对该部分内容进行讲解，包括观测处理及优化指南等。
+
+## 观测处理
+
+环境返回的 `observation`信息包含了针对智能体的局部观测信息，可以在 `observation_process`函数中对这些局部观测信息进行处理。
+
+很多情况下，观测信息体量较大且步骤繁多，我们推荐用户基于代码包提供的 `process_feature`进行特征处理：
+
+```python
+defprocess_feature(self, observation):
+    frame_state = observation["frame_state"]
+
+    main_camp_hero_vector_feature = self.process_hero_feature(frame_state)
+    organ_feature = self.process_organ_feature(frame_state)
+
+    feature = main_camp_hero_vector_feature + organ_feature
+
+return feature
+```
+
+### 特征处理
+
+通过在程序中调用 `env.reset`或 `env.step`，环境会返回当前帧的环境状态数据，从中可以获取到英雄血量、技能信息、防御塔信息等数值，基于游戏状态数据，可以处理得到智能体网络推理所需的特征。
+
+以下是特征区间及其维度的详细说明：
+
+|     **特征区间名**     | **特征维数** | **举例**       |
+| :---------------------------: | :----------------: | -------------------- |
+| main_camp_hero_vector_feature |         3         | 英雄存活情况、位置   |
+|         organ_feature         |         7         | 敌方防御塔血量、位置 |
+
+代码包中提供了一些特征的实现，可以参考 `<agent_算法名称>/feature/feature_process/__init__.py`目录下里的 `FeatureProcess`类的设计和实现。`FeatureProcess` 类内部包含了 `HeroProcess`，`OrganProcess`等子类，分别用于处理不同单位的特征。
+
+处理特征时，首先会根据当前观测的环境帧数据来保存各个单位的信息，然后从 `feature_config`特征配置中读取对应的**特征处理函数**和 **特征归一化配置** ：
+
+* **特征处理函数** ：用于从帧数据中提取特征。
+* **特征归一化配置** ：通过 one-hot 编码或最大最小值归一化方法，将特征归一化到 0～1 的范围，以便于网络推理计算。
+
+需要注意的是：
+
+* 对于位置特征：考虑到王者1v1中地图相对于游戏双方而言是镜像对称的，在双方眼中其都处于地图左下角，故使用相对位置特征，将处于地图右上角的英雄的特征数据进行镜像反转，将其转换为左下角位置。
+
+### 奖励处理
+
+这里的奖励特指强化学习中的Reward，注意要与环境反馈的Score进行区分。Score用于衡量玩家在任务中的表现，也作为衡量强化学习训练后的模型的优劣。
+
+代码包里提供了一些奖励的实现，可以参考 `<agent_算法名称>/feature/reward_process.py`里的 `GameRewardManager`类的设计和实现，用户还可以在这个函数中去实现自己的reward设计，这部分非常开放，回报设计的依据不一定只是环境给出的信息，也可以是用户对问题的理解、经验或者知识，建议用户根据对问题和强化学习算法的理解，去设计和实现自己的reward。
+
+参考代码包中GameRewardManager对reward的实现，同学们可以通过设计多个奖励子项来帮助智能体获得更好的效果。以下是推荐设计的奖励子项：
+
+| **reward** | **存储类型** | **描述**   |
+| ---------------- | ------------------ | ---------------- |
+| hp_point         | dense              | 英雄生命值比例   |
+| tower_hp_point   | dense              | 防御塔生命值比例 |
+| money (gold)     | dense              | 获得的总金币数   |
+| ep_rate          | dense              | 法力值比例       |
+| death            | sparse             | 英雄被击杀       |
+| kill             | sparse             | 击杀敌方英雄     |
+| exp              | dense              | 获得的经验值     |
+| last_hit         | sparse             | 对小兵的最后一击 |
+| forward          | dense              | 前进奖励         |
+
+其中，`tower_hp_point` 和 `forward` 奖励已在默认代码中实现，大家可以参考其设计思路进行扩展。
+
+#### 回报计算方法
+
+* 部分奖励使用零和reward设计方案，以当前决策帧和上一决策帧的相关数值差作为agent的reward，两个agent的同类reward项相减作为最终reward，最终多种reward项加权求和作为最终的reward返回。回报计算方法不止一种，我们鼓励用户进行创新。
+
+### 召唤师技能选择
+
+智能体在 **对局初始化阶段** ，需根据双方英雄信息自主选择一个召唤师技能，选择发生在 `env.reset()` 之前。
+
+### 选择流程
+
+```python
+usr_conf = load_usrconf()
+
+for camp in camps:
+    summoner_skill_id = agents[camp].init_config(lineups)
+    usr_conf[camp]["summoner_skill_id"]= summoner_skill_id
+
+# 对局初始化
+env_obs = env.reset(usr_conf)
+for camp in camps:
+    act = agents[camp].reset(env_obs)
+
+# 常规对战循环
+whilenot done:
+    action =[]
+for camp in camps:
+        act = agents[camp].exploit(env_obs)
+        action.append(act)
+    env_reward, env_obs = env.step(action)
+```
+
+### init_config 接口
+
+Agent 新增 `init_config()` 方法，用于在初始化阶段选择召唤师技能：
+
+```python
+definit_config(self, lineups)->dict:
+"""
+    在对局初始化阶段选择召唤师技能。
+
+    Args:
+        lineups: 双方英雄ID
+
+    Returns:
+        int: summoner_skill_id
+    """
+```
+
+### 召唤师技能列表
+
+| 技能名称 | 技能ID | 效果描述                                         |
+| :------: | :----: | ------------------------------------------------ |
+|  治疗术  | 80102 | 立即恢复英雄一定量的生命值                       |
+|   晕眩   | 80103 | 对身边所有敌人施加眩晕效果，使其短暂无法行动     |
+|   惩击   | 80104 | 对身边的野怪和小兵造成真实伤害并眩晕             |
+|   干扰   | 80105 | 沉默敌方机关使用，使其短暂无法进行攻击           |
+|   净化   | 80107 | 解除自身所有负面和控制效果并暂时免疫控制效果     |
+|   终结   | 80108 | 对低血量敌方英雄造成基于其已损失生命值的真实伤害 |
+|   疾跑   | 80109 | 短时间内大幅提升英雄移动速度                     |
+|   狂暴   | 80110 | 短时间内提升英雄物理吸血和法术吸血               |
+|   闪现   | 80115 | 向指定方向位移一段距离                           |
+|   弱化   | 80121 | 减少身边敌人伤害输出                             |
+
+
+
+
+# 数据协议
+
+为了方便同学们调用原始数据和特征数据，下面提供了协议供大家查阅。
+
+## 环境配置协议
+
+### 英雄阵容配置
+
+|  字段  | 数据类型 | 取值范围 |               说明               |
+| :-----: | :------: | :-------: | :------------------------------: |
+| hero_id |   int   | 112 / 133 | 英雄ID：112=鲁班七号，133=狄仁杰 |
+
+### 召唤师技能配置
+
+| 技能名称 | 技能ID | 效果描述                                         |
+| :------: | :----: | ------------------------------------------------ |
+|  治疗术  | 80102 | 立即恢复英雄一定量的生命值                       |
+|   晕眩   | 80103 | 对身边所有敌人施加眩晕效果，使其短暂无法行动     |
+|   惩击   | 80104 | 对身边的野怪和小兵造成真实伤害并眩晕             |
+|   干扰   | 80105 | 沉默敌方机关使用，使其短暂无法进行攻击           |
+|   净化   | 80107 | 解除自身所有负面和控制效果并暂时免疫控制效果     |
+|   终结   | 80108 | 对低血量敌方英雄造成基于其已损失生命值的真实伤害 |
+|   疾跑   | 80109 | 短时间内大幅提升英雄移动速度                     |
+|   狂暴   | 80110 | 短时间内提升英雄物理吸血和法术吸血               |
+|   闪现   | 80115 | 向指定方向位移一段距离                           |
+|   弱化   | 80121 | 减少身边敌人伤害输出                             |
+
+## 训练配置协议
+
+### train_env_conf.toml 字段说明
+
+|            字段            | 数据类型 |                       说明                       |
+| :-------------------------: | :------: | :-----------------------------------------------: |
+|        monitor_side        |   int   |             监控阵营，0=蓝方，1=红方             |
+|  auto_switch_monitor_side  |   bool   |               是否启用自动换边逻辑               |
+|       opponent_agent       |  string  |   对手类型：selfplay / common_ai / 自定义模型id   |
+|        eval_interval        |   int   |         评估间隔（单位：局），>=1 的整数         |
+|     eval_opponent_type     |  string  | 评估对手类型：selfplay / common_ai / 自定义模型id |
+| lineups.blue_camp[].hero_id |   int   |       蓝方英雄ID，112=鲁班七号，133=狄仁杰       |
+| lineups.red_camp[].hero_id |   int   |       红方英雄ID，112=鲁班七号，133=狄仁杰       |
+
+## 任务状态协议
+
+|  状态值  | 说明                                                   |
+| :------: | ------------------------------------------------------ |
+| 任务完成 | 其中一方阵营的防御塔被推掉，胜利方得一分，失败方不得分 |
+| 任务超时 | 达到平台超时设定（20000帧）仍未完成任务，双方均不得分  |
+| 任务异常 | 各种原因导致的异常，双方均不得分                       |
+
+## 算法监控指标协议
+
+### basic（基础指标）
+
+|                指标名称                |                      说明                      |
+| :-------------------------------------: | :---------------------------------------------: |
+|            train_global_step            |    训练的累计步数，即 agent.learn 的调用次数    |
+|            predict_succ_cnt            | 采样预测的累计帧数，即 agent.predict 的调用次数 |
+|           load_model_succ_cnt           |         预测进程加载模型文件成功的次数         |
+|           sample_receive_cnt           |                样本接收到的个数                |
+|               episode_cnt               |               已经结束的任务个数               |
+| sample_production_and_consumption_ratio |         训练步数除以采样预测的累计帧数         |
+
+### algorithm（PPO算法指标）
+
+|   指标名称   |             说明             |
+| :----------: | :--------------------------: |
+|    reward    |           累积回报           |
+|  total_loss  |      所有损失项的加权和      |
+|  value_loss  |      估计误差的损失函数      |
+| policy_loss |  用于优化策略网络的损失函数  |
+| entropy_loss | 用于鼓励策略探索性的损失函数 |
+
+### env（环境指标）—— self-play
+
+|    指标名称    |                                 说明                                 |
+| :-------------: | :-------------------------------------------------------------------: |
+|    win_rate    |                    胜率：胜利=1，失败=0，超时=0.5                    |
+|  self_tower_hp  |              每局结束时，monitor_side 阵营防御塔剩余血量              |
+| enemy_tower_hp |            每局结束时，monitor_side 敌对阵营防御塔剩余血量            |
+|      frame      |                   每局任务结束时，该局任务的总帧数                   |
+| money_per_frame |      每局结束时，monitor_side 视角获得 money 总量除以对局总帧数      |
+|      kill      |                   单局内我方英雄击杀敌方英雄的计数                   |
+|      death      |                      单局内我方英雄被击杀的计数                      |
+|  hurt_by_hero  | 每局结束时，monitor_side 视角受到来自敌方英雄伤害的总量除以对局总帧数 |
+|  hurt_to_hero  |  每局结束时，monitor_side 视角对敌方英雄造成伤害的总量除以对局总帧数  |
+
+### env（环境指标）—— eval
+
+与 self-play 指标相同，通过 label 区分对手类型，例如 `win_rate:common_ai`、`win_rate:{model_id}`。
+
+## 原始帧状态数据协议
+
+### AIFrameState — 帧状态
+
+| 字段名       | 字段类型        | 备注                                     |
+| ------------ | --------------- | ---------------------------------------- |
+| frame_no     | int32           | 当前帧号                                 |
+| hero_states  | repeated Hero   | 英雄状态组                               |
+| npc_states   | repeated NPC    | 非玩家角色状态组（小兵、防御塔、野怪等） |
+| bullets      | repeated Bullet | 子弹状态组                               |
+| cakes        | repeated Cake   | 功能物件组（神符等）                     |
+| frame_action | FrameAction     | 帧事件（死亡事件等）                     |
+| map_state    | bool/int        | 地图状态（1v1 默认不使用，原样透传）     |
+
+---
+
+### Hero — 英雄状态
+
+| 字段名                | 字段类型               | 备注                                |
+| --------------------- | ---------------------- | ----------------------------------- |
+| player_id             | uint32                 | 玩家id                              |
+| config_id             | int32                  | 配置档ID，区分英雄                  |
+| runtime_id            | int32                  | 运行时id                            |
+| actor_type            | int                    | Actor主类型（见 ActorType 枚举）    |
+| sub_type              | int                    | Actor子类型（见 ActorSubType 枚举） |
+| camp                  | int                    | 所属阵营（蓝方=1，红方=2）          |
+| behav_mode            | int                    | 当前行为状态（如死亡等）            |
+| location              | VInt3                  | 位置                                |
+| forward               | VInt3                  | 朝向                                |
+| hp                    | int32                  | 当前生命                            |
+| max_hp                | int32                  | 最大生命                            |
+| abilities             | repeated bool          | 能力状态                            |
+| attack_range          | int32                  | 普攻范围                            |
+| attack_target         | int32                  | 攻击目标 runtime_id                 |
+| kill_income           | int32                  | 含金值                              |
+| hit_target_info       | repeated HitTargetInfo | 命中的目标                          |
+| camp_visible          | repeated bool          | 阵营可见（[0]=蓝方，[1]=红方）      |
+| sight_area            | int32                  | 视野范围                            |
+| phy_atk               | int32                  | 物理攻击                            |
+| phy_def               | int32                  | 物理防御                            |
+| mgc_atk               | int32                  | 魔法攻击                            |
+| mgc_def               | int32                  | 魔法防御                            |
+| mov_spd               | int32                  | 移动速度                            |
+| atk_spd               | int32                  | 攻速加成                            |
+| ep                    | int32                  | 当前能量                            |
+| max_ep                | int32                  | 最大能量                            |
+| hp_recover            | int32                  | 生命回复                            |
+| ep_recover            | int32                  | 能量回复                            |
+| phy_armor_hurt        | int32                  | 物理护甲穿透                        |
+| mgc_armor_hurt        | int32                  | 魔法护甲穿透                        |
+| crit_rate             | int32                  | 爆击率                              |
+| crit_effe             | int32                  | 爆击效果                            |
+| phy_vamp              | int32                  | 物理吸血                            |
+| mgc_vamp              | int32                  | 魔法吸血                            |
+| cd_reduce             | int32                  | 冷却缩减                            |
+| ctrl_reduce           | int32                  | 韧性                                |
+| skill_state           | SkillState             | 技能状态                            |
+| equip_state           | EquipState             | 装备状态                            |
+| buff_state            | BuffState              | BUFF状态                            |
+| level                 | int32                  | 等级                                |
+| exp                   | int32                  | 经验                                |
+| money                 | int32                  | 金钱                                |
+| revive_time           | int32                  | 复活时间                            |
+| kill_cnt              | int32                  | 击杀次数                            |
+| dead_cnt              | int32                  | 死亡次数                            |
+| assist_cnt            | int32                  | 助攻次数                            |
+| money_cnt             | int32                  | 经济总量                            |
+| total_hurt            | int32                  | 总输出                              |
+| total_hurt_to_hero    | int32                  | 对英雄伤害输出                      |
+| total_be_hurt_by_hero | int32                  | 承受英雄伤害                        |
+| passive_skill         | repeated PassiveSkill  | 被动技能                            |
+| real_cmd              | repeated CmdPkg        | 实际执行指令                        |
+| is_in_grass           | bool                   | 是否在草丛中                        |
+| take_hurt_infos       | repeated TakeHurtInfo  | 承受伤害序列                        |
+
+---
+
+### NPC — 非玩家角色状态
+
+| 字段名          | 字段类型               | 备注                |
+| --------------- | ---------------------- | ------------------- |
+| config_id       | int32                  | 配置档ID            |
+| runtime_id      | int32                  | 运行时id            |
+| actor_type      | int                    | Actor主类型         |
+| sub_type        | int                    | Actor子类型         |
+| camp            | int                    | 所属阵营            |
+| behav_mode      | int                    | 当前行为状态        |
+| location        | VInt3                  | 位置                |
+| forward         | VInt3                  | 朝向                |
+| hp              | int32                  | 当前生命            |
+| max_hp          | int32                  | 最大生命            |
+| abilities       | repeated bool          | 能力状态            |
+| attack_range    | int32                  | 普攻范围            |
+| attack_target   | int32                  | 攻击目标 runtime_id |
+| kill_income     | int32                  | 含金值              |
+| hit_target_info | repeated HitTargetInfo | 命中的目标          |
+| camp_visible    | repeated bool          | 阵营可见            |
+| sight_area      | int32                  | 视野范围            |
+| phy_atk         | int32                  | 物理攻击            |
+| phy_def         | int32                  | 物理防御            |
+| mgc_atk         | int32                  | 魔法攻击            |
+| mgc_def         | int32                  | 魔法防御            |
+| mov_spd         | int32                  | 移动速度            |
+| atk_spd         | int32                  | 攻速加成            |
+| ep              | int32                  | 当前能量            |
+| max_ep          | int32                  | 最大能量            |
+| hp_recover      | int32                  | 生命回复            |
+| ep_recover      | int32                  | 能量回复            |
+| phy_armor_hurt  | int32                  | 物理护甲穿透        |
+| mgc_armor_hurt  | int32                  | 魔法护甲穿透        |
+| crit_rate       | int32                  | 爆击率              |
+| crit_effe       | int32                  | 爆击效果            |
+| phy_vamp        | int32                  | 物理吸血            |
+| mgc_vamp        | int32                  | 魔法吸血            |
+| cd_reduce       | int32                  | 冷却缩减            |
+| ctrl_reduce     | int32                  | 韧性                |
+| buff_state      | BuffState              | BUFF状态            |
+| hurt_hero_info  | repeated HurtHeroInfo  | 对英雄伤害          |
+
+---
+
+### SkillState — 技能状态
+
+| 字段名      | 字段类型                | 备注       |
+| ----------- | ----------------------- | ---------- |
+| slot_states | repeated SkillSlotState | 技能槽列表 |
+
+### SkillSlotState — 技能槽状态
+
+| 字段名          | 字段类型 | 备注                   |
+| --------------- | -------- | ---------------------- |
+| configId        | int32    | 配置ID                 |
+| slot_type       | int      | 技能槽类型             |
+| level           | int32    | 等级                   |
+| usable          | bool     | 能否使用               |
+| cooldown        | int32    | CD剩余时长             |
+| cooldown_max    | int32    | CD总长                 |
+| usedTimes       | int32    | 释放次数               |
+| hitHeroTimes    | int32    | 命中英雄释放次数       |
+| succUsedInFrame | int32    | 当前帧成功使用次数     |
+| nextConfigID    | int32    | 多段技能的下一个技能id |
+| comboEffectTime | int32    | 组合技激活余留时间     |
+
+---
+
+### EquipState — 装备状态
+
+| 字段名 | 字段类型           | 备注     |
+| ------ | ------------------ | -------- |
+| equips | repeated EquipSlot | 装备列表 |
+
+### EquipSlot — 装备槽
+
+| 字段名        | 字段类型              | 备注                     |
+| ------------- | --------------------- | ------------------------ |
+| configId      | int32                 | 配置ID（对应装备配置表） |
+| buyPrice      | int32                 | 购买单价                 |
+| amount        | int32                 | 数量                     |
+| active_skill  | repeated ActiveSkill  | 装备主动技能             |
+| passive_skill | repeated PassiveSkill | 装备被动技能             |
+
+### ActiveSkill — 主动技能
+
+| 字段名         | 字段类型 | 备注       |
+| -------------- | -------- | ---------- |
+| active_skillid | int32    | 主动技能ID |
+| cooldown       | int32    | CD剩余时长 |
+
+### PassiveSkill — 被动技能
+
+| 字段名          | 字段类型 | 备注       |
+| --------------- | -------- | ---------- |
+| passive_skillid | int32    | 被动技能ID |
+| cooldown        | int32    | CD剩余时长 |
+
+---
+
+### BuffState — BUFF状态
+
+| 字段名      | 字段类型                | 备注         |
+| ----------- | ----------------------- | ------------ |
+| buff_skills | repeated BuffSkillState | 产生的BUFF组 |
+| buff_marks  | repeated BuffMarkState  | 印记状态组   |
+
+### BuffSkillState — BUFF技能状态
+
+| 字段名    | 字段类型 | 备注     |
+| --------- | -------- | -------- |
+| configId  | int32    | 配置ID   |
+| times     | int32    | 生效次数 |
+| startTime | uint64   | 开始时间 |
+
+### BuffMarkState — 印记状态
+
+| 字段名         | 字段类型 | 备注     |
+| -------------- | -------- | -------- |
+| origin_actorId | int32    | 施放者ID |
+| configId       | int32    | 配置ID   |
+| layer          | int32    | 层数     |
+
+---
+
+### Bullet — 子弹信息
+
+| 字段名       | 字段类型 | 备注       |
+| ------------ | -------- | ---------- |
+| runtime_id   | int32    | 运行时id   |
+| camp         | int      | 所属阵营   |
+| source_actor | int32    | 源actorID  |
+| slot_type    | int      | 施放技能槽 |
+| skill_id     | int32    | 所属技能   |
+| location     | VInt3    | 当前位置   |
+
+---
+
+### Cake — 功能物件
+
+| 字段名   | 字段类型 | 备注                                          |
+| -------- | -------- | --------------------------------------------- |
+| configId | int32    | 配置ID（对应神符配置表）                      |
+| collider | object   | 碰撞体 `{ location: VInt3, radius: int32 }` |
+
+---
+
+### HitTargetInfo — 命中目标信息
+
+| 字段名          | 字段类型 | 备注                  |
+| --------------- | -------- | --------------------- |
+| hit_target      | int32    | 命中目标的 runtime_id |
+| skill_id        | int32    | 技能ID                |
+| slot_type       | int      | 施放技能槽            |
+| conti_hit_count | int32    | 连续命中次数          |
+
+---
+
+### HurtHeroInfo — 对英雄伤害信息（NPC 使用）
+
+| 字段名      | 字段类型 | 备注                  |
+| ----------- | -------- | --------------------- |
+| hurt_target | int32    | 受伤英雄的 runtime_id |
+| hurt        | int32    | 伤害值                |
+
+---
+
+### TakeHurtInfo — 承受伤害信息（Hero 使用）
+
+| 字段名     | 字段类型 | 备注               |
+| ---------- | -------- | ------------------ |
+| atker      | int32    | 攻击者 runtime_id  |
+| hurtValue  | int32    | 伤害数值           |
+| skillSlot  | int32    | 攻击者使用的技能槽 |
+| sourceType | int      | 伤害来源类型       |
+| sourceID   | int32    | 伤害来源ID         |
+
+---
+
+### FrameAction — 帧事件
+
+| 字段名      | 字段类型            | 备注         |
+| ----------- | ------------------- | ------------ |
+| dead_action | repeated DeadAction | 死亡事件列表 |
+
+### DeadAction — 死亡事件
+
+| 字段名     | 字段类型                 | 备注       |
+| ---------- | ------------------------ | ---------- |
+| death      | ActionActorInfo          | 死亡对象   |
+| killer     | ActionActorInfo          | 击杀者     |
+| assist_set | repeated ActionActorInfo | 助攻者列表 |
+
+### ActionActorInfo — 事件中的 Actor 信息
+
+| 字段名           | 字段类型                      | 备注                                                                     |
+| ---------------- | ----------------------------- | ------------------------------------------------------------------------ |
+| config_id        | int32                         | 配置档ID                                                                 |
+| runtime_id       | int32                         | 运行时id                                                                 |
+| actor_type       | int                           | Actor主类型                                                              |
+| sub_type         | int                           | Actor子类型                                                              |
+| camp             | int                           | 所属阵营                                                                 |
+| hurt_info        | repeated ActionHurtInfo       | 伤害信息列表                                                             |
+| income_info      | object                        | 收益信息 `{ exp: int32, money: int32 }`                                |
+| achievement_info | object                        | 成就信息 `{ multi_kill: int32, conti_kill: int32, conti_dead: int32 }` |
+| single_hurt_list | repeated ActionSingleHurtInfo | 单次伤害明细列表                                                         |
+
+### ActionHurtInfo — 伤害信息
+
+| 字段名    | 字段类型 | 备注     |
+| --------- | -------- | -------- |
+| hurt_type | int      | 伤害类型 |
+| hurt_val  | int32    | 伤害值   |
+| icon_name | string   | 图标名称 |
+| name      | string   | 伤害名称 |
+
+### ActionSingleHurtInfo — 单次伤害明细
+
+| 字段名     | 字段类型       | 备注               |
+| ---------- | -------------- | ------------------ |
+| frameNo    | int32          | 发生帧号           |
+| config_id  | int32          | 伤害来源配置ID     |
+| runtime_id | int32          | 伤害来源runtime id |
+| slot_type  | int            | 伤害来源技能槽     |
+| hurt_info  | ActionHurtInfo | 伤害信息           |
+
+---
+
+### VInt3 — 三维坐标
+
+| 字段名 | 字段类型 | 备注  |
+| ------ | -------- | ----- |
+| x      | int32    | x坐标 |
+| y      | int32    | y坐标 |
+| z      | int32    | z坐标 |
+
+---
+
+### CmdPkg — 指令信息
+
+`Hero.real_cmd` 内每一个元素为一个 `CmdPkg`，表示英雄实际执行的指令。各子字段按 `command_type` 取值解释对应字段：
+
+| 字段名        | 字段类型 | 备注                                                                              |
+| ------------- | -------- | --------------------------------------------------------------------------------- |
+| command_type  | int      | 指令类型                                                                          |
+| move_pos      | object   | 指向目标移动命令参数 `{ destPos: VInt3 }`                                       |
+| move_dir      | object   | 指向方向移动命令参数 `{ degree: int }`                                          |
+| attack_common | object   | 普通攻击命令参数 `{ start: int, actorID: int }`（`start`：0 按下，1 抬起）    |
+| attack_topos  | object   | 移动施法命令参数 `{ destPos: VInt3 }`                                           |
+| attack_actor  | object   | 锁定目标命令参数 `{ actorID: int }`                                             |
+| obj_skill     | object   | 目标性技能命令参数 `{ skillID: int, actorID: int, slotType: int }`              |
+| dir_skill     | object   | 方向性技能命令参数 `{ skillID: int, actorID: int, slotType: int, degree: int }` |
+| pos_skill     | object   | 位置性技能命令参数 `{ skillID: int, destPos: VInt3, slotType: int }`            |
+| learn_skill   | object   | 学习技能命令参数 `{ slotType: int, level: int }`                                |
+| buy_equip     | object   | 购买装备命令参数 `{ equipId: int, obj_id: int }`                                |
+| sell_equip    | object   | 出售装备命令参数 `{ equipIndex: int }`                                          |
+| charge_skill  | object   | 蓄力技能命令参数 `{ slotType: int, state: int, degree: int }`                   |
+
+---
+
+### ActorType — Actor 主类型
+
+| 枚举值             | 备注                    |
+| ------------------ | ----------------------- |
+| ACTOR_TYPE_HERO    | 英雄                    |
+| ACTOR_TYPE_MONSTER | 野怪                    |
+| ACTOR_TYPE_ORGAN   | 机关（防御塔 / 水晶等） |
+| ACTOR_TYPE_BULLET  | 子弹                    |
+| ACTOR_TYPE_SHENFU  | 神符                    |
+
+### ActorSubType — Actor 子类型
+
+| 枚举值                 | 备注       |
+| ---------------------- | ---------- |
+| ACTOR_SUB_SOLDIER      | 小兵       |
+| ACTOR_SUB_TOWER_SPRING | 泉水塔     |
+| ACTOR_SUB_TOWER        | 普通防御塔 |
+| ACTOR_SUB_CRYSTAL      | 基地水晶   |
+
+---
+
+## 观测与动作协议
+
+> 以下结构对应 agent 通过 `env.reset` / `env.step` 实际收到的 Python dict 形态（已由环境侧从 proto 反序列化为字典，无需 agent 处理 proto）。
+
+### env.reset / env.step 返回结构
+
+`env.reset(usr_conf)` 返回一个 dict；`env.step(actions)` 返回 `(env_reward, env_obs)` 元组。`env_obs` 结构如下：
+
+| 字段名      | 字段类型  | 备注                                     |
+| ----------- | --------- | ---------------------------------------- |
+| frame_no    | int       | 当前帧号                                 |
+| observation | dict      | 各阵营观测                               |
+| extra_info  | ExtraInfo | 环境额外信息，详见下文                   |
+| terminated  | int       | 当前环境实例是否结束（1=结束，0=未结束） |
+| truncated   | int       | 当前环境实例是否异常或中断               |
+
+### Observation — 玩家观测（`observation["0"]` / `observation["1"]`）
+
+| 字段名          | 字段类型              | 备注                                        |
+| --------------- | --------------------- | ------------------------------------------- |
+| env_id          | str                   | 对局id                                      |
+| player_id       | int                   | 英雄运行时id，作为英雄唯一标识              |
+| player_camp     | int                   | 英雄所属阵营                                |
+| legal_action    | repeated int          | 合法动作掩码（按 `LABEL_SIZE_LIST` 拼接） |
+| sub_action_mask | repeated repeated int | 各 button 对应的子动作掩码列表              |
+| frame_state     | AIFrameState          | 当前帧状态（结构见上文 `AIFrameState`）   |
+| win             | int                   | 当前阵营是否胜利（一般在结束帧才有最终值）  |
+
+### ExtraInfo — 额外信息
+
+| 字段名         | 字段类型 | 备注                              |
+| -------------- | -------- | --------------------------------- |
+| result_code    | int      | 错误码：0=正常，非 0 表示环境异常 |
+| result_message | str      | 错误详情或 "OK"                   |
+
+### env_reward — step 返回的 reward 数据
+
+| 字段名 | 字段类型 | 备注                                                                                      |
+| ------ | -------- | ----------------------------------------------------------------------------------------- |
+| reward | dict     | 各阵营累积/瞬时 reward（结构由训练侧填充，比赛分数请通过 `observation[i]["win"]` 判断） |
+
+### Action — 动作
+
+调用 `env.step(actions)` 时传入的 `actions` 为长度等于阵营数的列表，每个元素为该阵营的动作输出（来自 `agent.predict` / `agent.exploit` 的返回值）。动作的具体结构由代码包的 `Agent.action_process` 决定，对 PPO baseline 而言为按 `LABEL_SIZE_LIST = [12, 16, 16, 16, 16, 9]` 顺序的离散动作 id 列表。
