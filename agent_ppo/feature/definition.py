@@ -34,7 +34,7 @@ def lineup_iterator_roundrobin_camp_heroes(camp_heroes=None):
     for lineups in itertools.product(camp_heroes, camp_heroes):
         camp = []
         for lineup in lineups:
-            camp.append(lineup)
+            camp.append(lineup[0] if isinstance(lineup, (list, tuple)) else lineup)
         camps.append(camp)
     return _lineup_iterator_shuffle_cycle(camps)
 
