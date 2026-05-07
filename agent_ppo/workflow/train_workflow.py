@@ -13,6 +13,7 @@ import time
 import random
 import json
 from pathlib import Path
+from agent_ppo.feature.reward_process import GameRewardManager
 from agent_ppo.feature.definition import (
     sample_process,
     build_frame,
@@ -182,7 +183,9 @@ class EpisodeRunner:
             # 回报初始化
             for i, (do_sample, agent) in enumerate(zip(self.do_samples, self.agents)):
                 if do_sample:
-                    reward = agent.reward_manager.result(observation[str(i)]["frame_state"])
+                    if agent.reward_manager is None:
+                        agent.reward_manager = GameRewardManager(observation[str(i)]["player_id"])
+                    reward = agent.reward_manager.result(observation[str(i)])
                     observation[str(i)]["reward"] = reward
                     reward_sum_list[i] += reward["reward_sum"]
 
@@ -232,7 +235,9 @@ class EpisodeRunner:
                 # 计算回报，作为当前环境状态observation的一部分
                 for i, (do_sample, agent) in enumerate(zip(self.do_samples, self.agents)):
                     if do_sample:
-                        reward = agent.reward_manager.result(observation[str(i)]["frame_state"])
+                        if agent.reward_manager is None:
+                            agent.reward_manager = GameRewardManager(observation[str(i)]["player_id"])
+                        reward = agent.reward_manager.result(observation[str(i)])
                         observation[str(i)]["reward"] = reward
                         reward_sum_list[i] += reward["reward_sum"]
 
